@@ -238,12 +238,27 @@ async function runAlertnessTest() {
   await speak('Reaction test. Say anything the instant you hear me say Now.');
   await sleep(1000);
   const reactionTimes = [];
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   for (let i = 0; i < 3; i++) {
     await speak('Ready.');
+
+    // Pre-warm recognition before the random delay so it's running when "Now!" finishes
+    let resultResolve;
+    const resultPromise = new Promise(resolve => { resultResolve = resolve; });
+    const rec = new SR();
+    rec.lang = 'en-US';
+    const warmPromise = new Promise(resolve => { rec.onstart = resolve; });
+    rec.onresult = (e) => resultResolve(e.results[0][0].transcript);
+    rec.onerror = () => resultResolve('');
+    rec.onend = () => resultResolve('');
+    try { rec.start(); } catch (_) { resultResolve(''); }
+    await warmPromise; // wait until mic is actually open
+
     await sleep(randomBetween(2000, 4500));
     await speak('Now!');
-    const rStart = Date.now();
-    const rResp = await listenOnce(5);
+    const rStart = Date.now(); // timer starts after "Now!" finishes, mic already running
+    setTimeout(() => { try { rec.stop(); } catch (_) {} resultResolve(''); }, 5000);
+    const rResp = await resultPromise;
     reactionTimes.push(rResp ? (Date.now() - rStart) / 1000 : 6.0);
     await sleep(800);
   }
