@@ -38,9 +38,33 @@ OpenStreetMap geocodes locations via Nominatim then queries Overpass within a co
 
 Handles: HOS/ELD logs, Bills of Lading, DVIRs, IFTA fuel tax, oversize/overweight permits, hazmat documentation, CDL endorsements, drug/alcohol testing records.
 
-No external tools — pure Claude knowledge with current FMCSA HOS limits injected into the system prompt:
+FMCSA HOS limits injected into the system prompt:
 - Driving: 11 hrs/shift · On-duty: 14 hrs/shift · Break: 30 min after 8 hrs driving
 - Weekly: 70 hrs / 8-day period · Reset: 10 consecutive hours off-duty
+
+### Voice Tools
+
+| What the driver says | Tool | Action |
+|---|---|---|
+| *"I started driving at 7:30 in Amarillo"* | `log_duty_status` | Records status change on today's 395.8 log |
+| *"How many hours do I have left today?"* | `get_hos_summary` | Returns driving + on-duty hours and remaining time |
+| *"How many hours left this week?"* | `get_weekly_hours` | Returns 70-hr window usage and hours remaining |
+| *"Fueled up in Texas, 95 gallons at Love's, $3.84"* | `log_fuel_purchase` | Logs IFTA fuel receipt |
+| *"Just crossed into Oklahoma at mile 184,000"* | `log_state_crossing` | Records state line crossing for mileage tracking |
+| *"Give me my IFTA report for Q1"* | `get_ifta_summary` | Compiles miles + fuel by jurisdiction, fleet MPG |
+
+### Database (`database.py` → `data/truck_ai.db`)
+
+4 SQLite tables matching the physical form layouts:
+
+| Table | Mirrors | Key columns |
+|---|---|---|
+| `hos_logs` | FMCSA 395.8 header | date, truck #, trailer #, BOL numbers, carrier, co-driver |
+| `hos_entries` | 395.8 duty status grid | status, start_time, end_time, location, remarks |
+| `ifta_fuel` | IFTA-100 fuel receipt detail | jurisdiction, gallons, price/gallon, vendor, receipt #, odometer |
+| `ifta_crossings` | State line crossings | jurisdiction, odometer, crossing_time (used to compute miles/state) |
+
+Database is auto-created on first run. IFTA quarterly miles per state are derived from the crossings table by diffing odometer readings at each state line.
 
 ---
 
@@ -68,6 +92,8 @@ A structured 3-part voice test. Results are scored and assessed by Claude, then 
 | `claude_client.py` | Thin Anthropic API wrapper with prompt caching |
 | `config.py` | API keys, FMCSA constants, model selection |
 | `.env` | Secrets (copy from `.env.example`) |
+| `database.py` | SQLite DB layer — HOS and IFTA read/write functions |
+| `data/truck_ai.db` | Auto-created SQLite database (HOS logs, IFTA records) |
 | `data/alertness_log.json` | Auto-created drowsy test history |
 
 ---

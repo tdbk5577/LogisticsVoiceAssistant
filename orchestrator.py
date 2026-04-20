@@ -4,6 +4,7 @@ from voice_engine import VoiceEngine
 from agents.logistics_agent import LogisticsAgent
 from agents.paperwork_agent import PaperworkAgent
 from agents.drowsy_test import DrowsyTest
+from daily_log import DailyLogChecker
 
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -107,6 +108,8 @@ class Orchestrator:
     # ── Main loop ────────────────────────────────────────────────────────────
 
     def run(self):
+        DailyLogChecker(self._voice).run()
+
         self._voice.speak("Truck AI ready. Say 'Hey Truck' to get started.")
         print("[TRUCK AI] Listening for wake word... (Ctrl+C to quit)")
 
