@@ -96,6 +96,12 @@ def _classify(text: str, active: str | None) -> str:
 
 # ── Debug ─────────────────────────────────────────────────────────────────────
 
+@app.get("/debug/weather")
+def debug_weather(location: str = "Charlotte, NC"):
+    from agents.logistics_agent import _fetch_weather
+    return {"result": _fetch_weather(location)}
+
+
 @app.get("/debug/env")
 def debug_env():
     return {
