@@ -1,6 +1,5 @@
 import anthropic
 import config
-import log_reporter
 from voice_engine import VoiceEngine
 from agents.logistics_agent import LogisticsAgent
 from agents.paperwork_agent import PaperworkAgent
@@ -112,37 +111,6 @@ class Orchestrator:
         t = text.lower()
         return "ifta" in t and any(w in t for w in ("check", "review", "log", "record"))
 
-    def _is_email_log_request(self, text: str) -> bool:
-        t = text.lower()
-        return any(w in t for w in ("email", "send", "print")) and any(
-            w in t for w in ("log", "logs", "report")
-        )
-
-    def _run_email_log_flow(self):
-        self._voice.speak("What email address should I send the log to?")
-        spoken = self._voice.listen(timeout=10, phrase_limit=30)
-        if not spoken:
-            self._voice.speak("Didn't catch that. Try again when ready.")
-            return
-
-        email = log_reporter.parse_spoken_email(spoken)
-        self._voice.speak(f"Sending to {email}. Is that right?")
-        confirm = self._voice.listen(timeout=6, phrase_limit=5)
-        if not confirm or not any(w in confirm.lower() for w in ("yes", "yeah", "yep", "correct", "right")):
-            self._voice.speak("Cancelled. Let me know when you want to try again.")
-            return
-
-        self._voice.speak("Sending now.")
-        try:
-            log_reporter.send_log_email(email)
-            self._voice.speak("Log sent. Check your email.")
-        except ValueError as e:
-            self._voice.speak("Email isn't set up yet. Ask your dispatcher to add the email credentials.")
-            print(f"[EMAIL] Config error: {e}")
-        except Exception as e:
-            self._voice.speak("Something went wrong sending the email. Try again later.")
-            print(f"[EMAIL] Send error: {e}")
-
     def run(self):
         checker = DailyLogChecker(self._voice)
         checker.run()
@@ -164,10 +132,6 @@ class Orchestrator:
 
                 if self._is_ifta_review(command):
                     checker.review_ifta()
-                    continue
-
-                if self._is_email_log_request(command):
-                    self._run_email_log_flow()
                     continue
 
                 response = self.handle(command)

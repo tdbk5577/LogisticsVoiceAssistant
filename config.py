@@ -19,11 +19,6 @@ WEEKLY_LIMIT_HOURS = 70
 WEEKLY_PERIOD_DAYS = 8
 RESET_HOURS = 10
 
-# Email (for log reports — via Mailgun)
-MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY", "")
-MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "")
-
 # Proactive timing
 ROUTE_BRIEFING_INTERVAL_MIN = 45
 WELLNESS_CHECKIN_INTERVAL_MIN = 120
