@@ -149,8 +149,8 @@ In the mobile prototype the drowsy test runs fully on-device (timing, audio, sco
 
 **Local:**
 ```bash
-pip install -r requirements.txt
-brew install ffmpeg          # for ElevenLabs audio streaming
+pip install -r requirements-local.txt   # includes PyAudio + SpeechRecognition
+brew install ffmpeg                      # for ElevenLabs audio streaming
 cp .env.example .env
 # Fill in .env with your API keys
 python main.py
