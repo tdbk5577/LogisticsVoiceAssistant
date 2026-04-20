@@ -418,6 +418,10 @@ function startListening() {
   mainRecognition.interimResults = true;
   mainRecognition.lang = 'en-US';
 
+  mainRecognition.onstart = () => { if (debugText) debugText.textContent = '🎤 mic active'; };
+  mainRecognition.onspeechstart = () => { if (debugText) debugText.textContent = '🎤 speech detected...'; };
+  mainRecognition.onspeechend = () => { if (debugText) debugText.textContent = '🎤 speech ended'; };
+
   mainRecognition.onresult = (e) => {
     if (appState === 'processing' || appState === 'speaking' || appState === 'alertness' || appState === 'logs') return;
 
@@ -454,15 +458,16 @@ function startListening() {
   };
 
   mainRecognition.onerror = (e) => {
+    if (debugText) debugText.textContent = '❌ error: ' + e.error;
     if (e.error === 'not-allowed') {
       statusText.textContent = 'Microphone permission denied';
       return;
     }
-    // Restart on transient errors
     setTimeout(startListening, 1000);
   };
 
   mainRecognition.onend = () => {
+    if (debugText) debugText.textContent += ' (restarting...)';
     if (appState === 'idle' || appState === 'awake') {
       setTimeout(startListening, 300);
     }
