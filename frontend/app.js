@@ -392,7 +392,9 @@ function startListeningForBack() {
   try { rec.start(); } catch (_) {}
 }
 
-// ── Tap-to-talk ────────────────────────────────────────────────────────────
+// ── Always-on listening (tap to activate, then stays on) ───────────────────
+
+let listeningActive = false;
 
 function stopListening() {
   if (mainRecognition) { try { mainRecognition.stop(); } catch (_) {} mainRecognition = null; }
@@ -402,19 +404,18 @@ function startListening() {
   stopListening();
   setState('idle');
   const btn = document.getElementById('talk-btn');
-  if (btn) { btn.textContent = '🎤 Tap to Talk'; btn.disabled = false; btn.classList.remove('listening'); }
+  if (listeningActive) {
+    if (btn) { btn.textContent = '🔴 Listening'; btn.classList.add('listening'); btn.disabled = false; }
+    beginContinuousListen();
+  } else {
+    if (btn) { btn.textContent = '🎤 Tap to Start'; btn.classList.remove('listening'); btn.disabled = false; }
+  }
   if (debugText) debugText.textContent = '';
 }
 
-function listenForCommand() {
+function beginContinuousListen() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { if (debugText) debugText.textContent = '❌ Speech recognition not supported. Use Chrome.'; return; }
-
-  const btn = document.getElementById('talk-btn');
-  btn.textContent = '🎤 Listening...';
-  btn.classList.add('listening');
-  btn.disabled = true;
-  setState('awake');
+  if (!SR) { if (debugText) debugText.textContent = '❌ Use Chrome for voice support.'; return; }
 
   mainRecognition = new SR();
   mainRecognition.lang = 'en-US';
@@ -424,21 +425,33 @@ function listenForCommand() {
     const last = e.results[e.results.length - 1];
     if (debugText) debugText.textContent = last[0].transcript;
     if (last.isFinal) {
-      stopListening();
-      handleCommand(last[0].transcript.trim());
+      const text = last[0].transcript.trim();
+      if (text) {
+        stopListening();
+        handleCommand(text); // handleCommand calls startListening() when done, which restarts
+      }
     }
   };
 
   mainRecognition.onerror = (e) => {
-    if (debugText) debugText.textContent = '❌ ' + e.error;
-    startListening();
+    if (e.error !== 'no-speech') {
+      if (debugText) debugText.textContent = '❌ ' + e.error;
+    }
   };
 
+  // Auto-restart when recognition ends (browser cuts off after silence)
   mainRecognition.onend = () => {
-    if (appState === 'awake') startListening();
+    if (listeningActive && (appState === 'idle' || appState === 'awake')) {
+      setTimeout(beginContinuousListen, 200);
+    }
   };
 
-  try { mainRecognition.start(); } catch (_) { startListening(); }
+  setState('awake');
+  const btn = document.getElementById('talk-btn');
+  if (btn) btn.textContent = '🔴 Listening';
+  try { mainRecognition.start(); } catch (_) {
+    setTimeout(beginContinuousListen, 500);
+  }
 }
 
 // ── Splash ─────────────────────────────────────────────────────────────────
@@ -470,7 +483,18 @@ function initSplash() {
     mainViewEl.classList.remove('hidden');
     startListening();
     document.getElementById('talk-btn').addEventListener('click', () => {
-      if (appState === 'idle') listenForCommand();
+      if (listeningActive) {
+        listeningActive = false;
+        stopListening();
+        setState('idle');
+        const btn = document.getElementById('talk-btn');
+        btn.textContent = '🎤 Tap to Start';
+        btn.classList.remove('listening');
+        if (debugText) debugText.textContent = '';
+      } else {
+        listeningActive = true;
+        beginContinuousListen();
+      }
     });
   });
 }
