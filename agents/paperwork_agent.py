@@ -22,7 +22,7 @@ FMCSA HOS limits:
 - Weekly: {config.WEEKLY_LIMIT_HOURS} hrs / {config.WEEKLY_PERIOD_DAYS}-day window
 - Reset: {config.RESET_HOURS} consecutive off-duty hours
 
-Be concise — responses are spoken aloud."""
+Be concise — responses are spoken aloud. Never use markdown, bullet points, asterisks, dashes, or lists. Plain spoken English only."""
 
 # ── Tool definitions ──────────────────────────────────────────────────────────
 

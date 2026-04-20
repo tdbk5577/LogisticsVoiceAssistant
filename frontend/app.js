@@ -137,6 +137,17 @@ function listenOnce(timeoutSec) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+function cleanForSpeech(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/#+\s*/g, '')
+    .replace(/^\s*[-•]\s+/gm, '')
+    .replace(/\n{2,}/g, '. ')
+    .replace(/\n/g, ' ')
+    .trim();
+}
+
 function randomChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function randomSample(arr, n) {
@@ -177,9 +188,10 @@ async function handleCommand(text) {
       body: JSON.stringify({ session_id: SESSION_ID, text }),
     });
     const data = await resp.json();
+    const clean = cleanForSpeech(data.text);
     addMessage('assistant', data.text);
     setAgent(data.agent);
-    await speak(data.text);
+    await speak(clean);
   } catch (err) {
     addMessage('assistant', 'Sorry, I had trouble connecting. Please try again.');
     await speak('Sorry, I had trouble connecting.');
@@ -286,86 +298,27 @@ async function runAlertnessTest() {
 // ── Logs view ──────────────────────────────────────────────────────────────
 
 async function showLogs() {
-  setState('logs');
-  logsView.classList.remove('hidden');
-  mainView.classList.add('hidden');
-  logsContent.innerHTML = '<p style="color:#666;text-align:center;padding:2rem">Loading...</p>';
-
+  setState('processing');
   try {
     const [hos, weekly, alertHistory] = await Promise.all([
       fetch('/hos/summary').then(r => r.json()),
       fetch('/hos/weekly').then(r => r.json()),
-      fetch('/alertness/history?limit=10').then(r => r.json()),
+      fetch('/alertness/history?limit=1').then(r => r.json()),
     ]);
 
-    const driveClass = hos.driving_remaining < 2 ? 'bad' : hos.driving_remaining < 4 ? 'warn' : 'good';
-    const dutyClass  = hos.on_duty_remaining < 2 ? 'bad' : hos.on_duty_remaining < 4 ? 'warn' : 'good';
-    const weekClass  = weekly.hours_remaining < 10 ? 'bad' : weekly.hours_remaining < 20 ? 'warn' : 'good';
+    const latest = alertHistory[0];
+    const alertPart = latest
+      ? `Your last alertness check scored ${Math.round(latest.overall_score * 100)} percent and was rated ${latest.level}.`
+      : 'No alertness checks on record.';
 
-    const alertRows = alertHistory.length
-      ? alertHistory.map(a => {
-          const d = new Date(a.timestamp);
-          const when = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-          return `<div class="alertness-row">
-            <span class="level-badge level-${a.level}">${a.level}</span>
-            <span class="alertness-detail">${when}</span>
-            <span class="alertness-detail">Mem ${a.memory_recalled}/5 · Math ${a.math_correct}/3 · React ${a.reaction_avg_time?.toFixed(1)}s</span>
-            <span class="alertness-score">${Math.round(a.overall_score * 100)}%</span>
-          </div>`;
-        }).join('')
-      : '<p style="color:#555;padding:0.5rem">No alertness tests recorded yet.</p>';
+    const summary = `Today you have driven ${hos.driving_hours} hours with ${hos.driving_remaining} hours remaining. You have been on duty ${hos.on_duty_hours} hours with ${hos.on_duty_remaining} hours left. This week you have used ${weekly.weekly_on_duty_hours} of your 70 hour limit, with ${weekly.hours_remaining} hours remaining. ${alertPart}`;
 
-    logsContent.innerHTML = `
-      <div class="log-section">
-        <h2>Today — Hours of Service (${hos.date})</h2>
-        <div class="stat-grid">
-          <div class="stat">
-            <div class="stat-value">${hos.driving_hours}</div>
-            <div class="stat-label">Hours Driven</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value ${driveClass}">${hos.driving_remaining}</div>
-            <div class="stat-label">Drive Time Left</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value">${hos.on_duty_hours}</div>
-            <div class="stat-label">On-Duty Hours</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value ${dutyClass}">${hos.on_duty_remaining}</div>
-            <div class="stat-label">On-Duty Left</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="log-section">
-        <h2>8-Day Rolling Window</h2>
-        <div class="stat-grid">
-          <div class="stat">
-            <div class="stat-value">${weekly.weekly_on_duty_hours}</div>
-            <div class="stat-label">Hours Used</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value ${weekClass}">${weekly.hours_remaining}</div>
-            <div class="stat-label">Hours Remaining</div>
-          </div>
-          <div class="stat">
-            <div class="stat-value">70</div>
-            <div class="stat-label">Weekly Limit</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="log-section">
-        <h2>Alertness History</h2>
-        ${alertRows}
-      </div>
-    `;
+    addMessage('assistant', summary);
+    await speak(summary);
   } catch (_) {
-    logsContent.innerHTML = '<p style="color:var(--danger);padding:1rem">Failed to load logs. Check your connection.</p>';
+    await speak('Sorry, I could not load your logs right now.');
   }
-
-  await speak('Your logs are ready.');
+  startListening();
 }
 
 function closeLogs() {
