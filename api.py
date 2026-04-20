@@ -99,8 +99,10 @@ def _classify(text: str, active: str | None) -> str:
 @app.get("/debug/env")
 def debug_env():
     return {
-        "ANTHROPIC_API_KEY_set": bool(os.getenv("ANTHROPIC_API_KEY")),
-        "config_key_set": bool(config.ANTHROPIC_API_KEY),
+        "ANTHROPIC_API_KEY": bool(config.ANTHROPIC_API_KEY),
+        "ELEVENLABS_API_KEY": bool(config.ELEVENLABS_API_KEY),
+        "OPENWEATHER_API_KEY": bool(config.OPENWEATHER_API_KEY),
+        "GOOGLE_PLACES_API_KEY": bool(config.GOOGLE_PLACES_API_KEY),
     }
 
 
