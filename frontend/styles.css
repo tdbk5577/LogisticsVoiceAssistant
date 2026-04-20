@@ -20,6 +20,46 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 #app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
+/* ── Splash ────────────────────────────────────────────────── */
+
+#splash-view {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 1rem; padding: 2rem; text-align: center;
+}
+
+#splash-logo { font-size: 5rem; line-height: 1; }
+#splash-title { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em; }
+#splash-sub { color: var(--muted); font-size: 1rem; margin-bottom: 0.5rem; }
+
+.warn-box {
+  background: rgba(234,179,8,0.1); border: 1px solid rgba(234,179,8,0.4);
+  border-radius: 12px; padding: 1rem 1.25rem; color: #fcd34d;
+  font-size: 0.95rem; line-height: 1.5; max-width: 360px;
+}
+
+#splash-how { display: flex; flex-direction: column; gap: 0.75rem; max-width: 360px; width: 100%; margin: 0.5rem 0; }
+
+.how-step {
+  display: flex; align-items: flex-start; gap: 0.75rem; text-align: left;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 0.85rem 1rem; font-size: 0.9rem; line-height: 1.4;
+}
+.how-num {
+  flex-shrink: 0; width: 1.5rem; height: 1.5rem; border-radius: 50%;
+  background: var(--speaking); color: white; font-size: 0.75rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+#splash-btn {
+  margin-top: 0.5rem; padding: 1rem 2.5rem; border-radius: 999px; border: none;
+  background: var(--awake); color: #000; font-size: 1.1rem; font-weight: 700;
+  cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 0 20px rgba(34,197,94,0.4);
+}
+#splash-btn:active { transform: scale(0.96); }
+
+#splash-tip { color: var(--muted); font-size: 0.8rem; }
+
 /* ── Main view ─────────────────────────────────────────────── */
 
 #main-view { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem 1rem; gap: 1.5rem; overflow: hidden; }

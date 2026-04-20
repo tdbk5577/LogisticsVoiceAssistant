@@ -12,6 +12,26 @@
 <body>
   <div id="app">
 
+    <!-- Splash screen -->
+    <div id="splash-view">
+      <div id="splash-logo">🚛</div>
+      <h1 id="splash-title">Elmeeda</h1>
+      <p id="splash-sub">AI Co-Pilot for Long-Haul Truckers</p>
+
+      <div id="browser-warn" class="hidden">
+        <div class="warn-box">⚠️ This demo requires <strong>Google Chrome</strong> for voice support.<br/>Please reopen this link in Chrome.</div>
+      </div>
+
+      <div id="splash-how" class="hidden">
+        <div class="how-step"><span class="how-num">1</span><span>Say <strong>"Hey Elmeeda"</strong> to wake the assistant</span></div>
+        <div class="how-step"><span class="how-num">2</span><span>Ask anything — routes, weather, hours of service, paperwork</span></div>
+        <div class="how-step"><span class="how-num">3</span><span>Say <strong>"Show my logs"</strong> or <strong>"Run alertness check"</strong> for more features</span></div>
+      </div>
+
+      <button id="splash-btn" class="hidden">Tap to Start</button>
+      <p id="splash-tip" class="hidden">Allow microphone access when prompted</p>
+    </div>
+
     <!-- Main voice interface -->
     <div id="main-view">
       <div id="orb-wrap">

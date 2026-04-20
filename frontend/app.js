@@ -472,20 +472,46 @@ function startListening() {
   }
 }
 
+// ── Splash ─────────────────────────────────────────────────────────────────
+
+function initSplash() {
+  const splashView = document.getElementById('splash-view');
+  const mainViewEl = document.getElementById('main-view');
+  const browserWarn = document.getElementById('browser-warn');
+  const splashHow  = document.getElementById('splash-how');
+  const splashBtn  = document.getElementById('splash-btn');
+  const splashTip  = document.getElementById('splash-tip');
+
+  const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg|OPR/.test(navigator.userAgent);
+
+  if (!isChrome) {
+    browserWarn.classList.remove('hidden');
+  } else {
+    splashHow.classList.remove('hidden');
+    splashBtn.classList.remove('hidden');
+    splashTip.classList.remove('hidden');
+  }
+
+  splashBtn.addEventListener('click', () => {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(() => {
+        splashView.classList.add('hidden');
+        mainViewEl.classList.remove('hidden');
+        startListening();
+      })
+      .catch(() => {
+        splashTip.textContent = 'Microphone access is required for this demo.';
+        splashTip.style.color = 'var(--danger)';
+      });
+  });
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-// Request mic permission and start
-navigator.mediaDevices.getUserMedia({ audio: true })
-  .then(() => startListening())
-  .catch(() => {
-    statusText.textContent = 'Tap to enable microphone';
-    document.body.addEventListener('click', () => {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(() => startListening())
-        .catch(() => { statusText.textContent = 'Microphone access required'; });
-    }, { once: true });
-  });
+// Hide main view until splash is dismissed
+document.getElementById('main-view').classList.add('hidden');
+initSplash();
