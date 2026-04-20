@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import os
+
 import config
 import database as db
 from agents.logistics_agent import LogisticsAgent
@@ -88,6 +90,16 @@ def _classify(text: str, active: str | None) -> str:
         return category if category in ("logistics", "paperwork") else "unknown"
     except Exception:
         return active or "unknown"
+
+
+# ── Debug ─────────────────────────────────────────────────────────────────────
+
+@app.get("/debug/env")
+def debug_env():
+    return {
+        "ANTHROPIC_API_KEY_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "config_key_set": bool(config.ANTHROPIC_API_KEY),
+    }
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
