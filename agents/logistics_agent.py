@@ -96,8 +96,8 @@ def _fetch_weather(location: str) -> str:
         wind = d["wind"]["speed"]
         feels = d["main"]["feels_like"]
         return f"{d['name']}: {desc}, {temp:.0f}°F (feels {feels:.0f}°F), wind {wind:.0f} mph"
-    except Exception:
-        return f"Weather unavailable for {location}."
+    except Exception as e:
+        return f"Weather unavailable for {location}: {e}"
 
 
 def _geocode(location: str) -> tuple[float, float] | None:
