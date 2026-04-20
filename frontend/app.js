@@ -505,38 +505,9 @@ function initSplash() {
   }
 
   splashBtn.addEventListener('click', () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      splashTip.textContent = 'Speech recognition not available. Please use Chrome.';
-      splashTip.style.color = 'var(--danger)';
-      splashTip.classList.remove('hidden');
-      return;
-    }
-
-    splashBtn.textContent = 'Starting...';
-    splashBtn.disabled = true;
-
-    // Let SpeechRecognition handle mic permission directly — avoids Arc audio routing conflicts
-    const test = new SR();
-    test.onstart = () => {
-      test.stop();
-      splashView.classList.add('hidden');
-      mainViewEl.classList.remove('hidden');
-      startListening();
-    };
-    test.onerror = (e) => {
-      splashBtn.textContent = 'Tap to Start';
-      splashBtn.disabled = false;
-      splashTip.textContent = e.error === 'not-allowed'
-        ? (isArc ? 'Mic blocked. Allow in Arc Settings → Privacy → Microphone.' : 'Microphone access denied. Check browser permissions.')
-        : 'Could not start voice recognition. Try reloading.';
-      splashTip.style.color = 'var(--danger)';
-      splashTip.classList.remove('hidden');
-    };
-    try { test.start(); } catch (_) {
-      splashBtn.textContent = 'Tap to Start';
-      splashBtn.disabled = false;
-    }
+    splashView.classList.add('hidden');
+    mainViewEl.classList.remove('hidden');
+    startListening();
   });
 }
 
