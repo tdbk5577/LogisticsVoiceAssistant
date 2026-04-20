@@ -289,23 +289,18 @@ async function runAlertnessTest() {
     });
   } catch (_) {}
 
-  // Get assessment from chat
-  const summary = `Alertness test complete. Memory: ${recalled} of 5 words recalled. Math: ${mathCorrect} of 3 correct, average ${mathAvg.toFixed(1)} seconds. Reaction: average ${reactionAvg.toFixed(1)} seconds. Overall score: ${Math.round(overall * 100)} percent.`;
-  try {
-    const resp = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: SESSION_ID, text: summary }),
-    });
-    const data = await resp.json();
-    addMessage('assistant', data.text);
-    setAgent('alertness');
-    await speak(data.text);
-  } catch (_) {
-    const fallback = `Your alertness score is ${Math.round(overall * 100)} percent. ${level === 'alert' ? "You're good to keep driving." : level === 'warning' ? 'Consider taking a short break.' : 'Please pull over and rest.'}`;
-    addMessage('assistant', fallback);
-    await speak(fallback);
-  }
+  // Generate assessment locally — no agent routing needed
+  const pct = Math.round(overall * 100);
+  const assessment =
+    level === 'alert'
+      ? `Alertness test complete. Your score is ${pct} percent — you're good to keep driving. Memory ${recalled} of 5, math ${mathCorrect} of 3, reaction ${reactionAvg.toFixed(1)} seconds.`
+      : level === 'warning'
+      ? `Alertness test complete. Your score is ${pct} percent. Consider taking a short break before continuing. Memory ${recalled} of 5, math ${mathCorrect} of 3, reaction ${reactionAvg.toFixed(1)} seconds.`
+      : `Alertness test complete. Your score is ${pct} percent. I strongly recommend pulling over and resting before you continue driving. Memory ${recalled} of 5, math ${mathCorrect} of 3, reaction ${reactionAvg.toFixed(1)} seconds.`;
+
+  addMessage('assistant', assessment);
+  setAgent('alertness');
+  await speak(assessment);
 
   setState('idle');
   startListening();
