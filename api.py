@@ -8,8 +8,10 @@ This API handles agent logic, routing, and all database operations.
 from datetime import date
 
 import anthropic
-from fastapi import FastAPI, HTTPException
+import requests as http
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import os
@@ -125,6 +127,9 @@ class AlertnessResult(BaseModel):
     math_avg_time: float
     reaction_avg_time: float
 
+class TTSRequest(BaseModel):
+    text: str
+
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
 
@@ -215,3 +220,36 @@ def save_alertness(result: AlertnessResult):
         reaction_avg_time=result.reaction_avg_time,
     )
     return {"ok": True}
+
+
+@app.get("/alertness/history")
+def alertness_history(limit: int = 20):
+    return db.get_alertness_history(limit)
+
+
+# ── TTS ───────────────────────────────────────────────────────────────────────
+
+@app.post("/tts")
+def text_to_speech(req: TTSRequest):
+    if not config.ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=503, detail="ELEVENLABS_API_KEY not set")
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{config.ELEVENLABS_VOICE_ID}"
+    resp = http.post(
+        url,
+        headers={"xi-api-key": config.ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+        json={
+            "text": req.text,
+            "model_id": "eleven_turbo_v2",
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+        },
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="ElevenLabs error")
+    return Response(content=resp.content, media_type="audio/mpeg")
+
+
+# ── Frontend (must be last) ───────────────────────────────────────────────────
+
+if os.path.isdir("frontend"):
+    app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

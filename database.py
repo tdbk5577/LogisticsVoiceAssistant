@@ -418,6 +418,14 @@ def set_driver_profile(
         )
 
 
+def get_alertness_history(limit: int = 20) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM alertness_logs ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def save_alertness_log(
     timestamp: str,
     level: str,

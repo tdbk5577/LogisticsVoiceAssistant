@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Elmeeda</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Main voice interface -->
+    <div id="main-view">
+      <div id="orb-wrap">
+        <div id="orb">
+          <div id="orb-ring"></div>
+          <div id="orb-icon">🚛</div>
+        </div>
+      </div>
+
+      <div id="status-text">Say "Hey Elmeeda"</div>
+      <div id="agent-badge" class="hidden"></div>
+
+      <div id="transcript">
+        <!-- filled by JS -->
+      </div>
+
+      <div id="prompts">
+        <div class="prompt-group">
+          <div class="prompt-label">Logistics</div>
+          <div class="prompt">Weather on I-80 through Wyoming?</div>
+          <div class="prompt">Find me diesel in the next 50 miles</div>
+          <div class="prompt">What's my ETA to Chicago?</div>
+        </div>
+        <div class="prompt-group">
+          <div class="prompt-label">Paperwork</div>
+          <div class="prompt">How many hours can I drive today?</div>
+          <div class="prompt">Help me log a 30-minute break</div>
+          <div class="prompt">Read me my HOS status</div>
+        </div>
+        <div class="prompt-group">
+          <div class="prompt-label">Alertness</div>
+          <div class="prompt">Run an alertness check</div>
+          <div class="prompt">Show my logs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logs overlay -->
+    <div id="logs-view" class="hidden">
+      <div id="logs-header">
+        <h1>Driver Logs</h1>
+        <div id="logs-controls">
+          <button onclick="window.print()" class="btn">Print</button>
+          <button onclick="closeLogs()" class="btn btn-secondary">Back</button>
+        </div>
+      </div>
+      <div id="logs-content">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
