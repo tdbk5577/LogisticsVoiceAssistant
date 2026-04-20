@@ -83,10 +83,14 @@ _PLACES_TOOL = {
 def _fetch_weather(location: str) -> str:
     if not config.OPENWEATHER_API_KEY:
         return "Weather service unavailable — no API key configured."
+    # OpenWeather requires "City,State,US" for US cities
+    q = location.strip().rstrip(",")
+    if "," in q and not q.upper().endswith(",US"):
+        q = q + ",US"
     try:
         r = requests.get(
             "https://api.openweathermap.org/data/2.5/weather",
-            params={"q": location, "appid": config.OPENWEATHER_API_KEY, "units": "imperial"},
+            params={"q": q, "appid": config.OPENWEATHER_API_KEY, "units": "imperial"},
             timeout=5,
         )
         r.raise_for_status()
@@ -97,7 +101,7 @@ def _fetch_weather(location: str) -> str:
         feels = d["main"]["feels_like"]
         return f"{d['name']}: {desc}, {temp:.0f}°F (feels {feels:.0f}°F), wind {wind:.0f} mph"
     except Exception as e:
-        return f"Weather unavailable for {location}: {e}"
+        return f"Weather unavailable for {location}: {type(e).__name__}"
 
 
 def _geocode(location: str) -> tuple[float, float] | None:
