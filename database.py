@@ -85,6 +85,18 @@ def init_db():
                 created_at       TEXT DEFAULT (datetime('now'))
             );
 
+            -- Alertness test results
+            CREATE TABLE IF NOT EXISTS alertness_logs (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp           TEXT NOT NULL,
+                level               TEXT NOT NULL,
+                overall_score       REAL NOT NULL,
+                memory_recalled     INTEGER,
+                math_correct        INTEGER,
+                math_avg_time       REAL,
+                reaction_avg_time   REAL
+            );
+
             -- State/province crossings — used to calculate miles per jurisdiction
             CREATE TABLE IF NOT EXISTS ifta_crossings (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -403,6 +415,26 @@ def set_driver_profile(
                    home_terminal   = COALESCE(excluded.home_terminal,   home_terminal),
                    updated_at      = datetime('now')""",
             (driver_name, carrier_address, home_terminal),
+        )
+
+
+def save_alertness_log(
+    timestamp: str,
+    level: str,
+    overall_score: float,
+    memory_recalled: int,
+    math_correct: int,
+    math_avg_time: float,
+    reaction_avg_time: float,
+):
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO alertness_logs
+               (timestamp, level, overall_score, memory_recalled,
+                math_correct, math_avg_time, reaction_avg_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (timestamp, level, overall_score, memory_recalled,
+             math_correct, math_avg_time, reaction_avg_time),
         )
 
 

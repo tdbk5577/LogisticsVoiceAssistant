@@ -1,11 +1,10 @@
-import json
-import os
 import random
 import time
 from datetime import datetime
 
 import anthropic
 import config
+import database as db
 
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -204,24 +203,12 @@ class DrowsyTest:
     # ── Logging ──────────────────────────────────────────────────────────────
 
     def _save(self, scores: dict, assessment: dict):
-        os.makedirs("data", exist_ok=True)
-        log_path = "data/alertness_log.json"
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "level": assessment["level"],
-            "overall_score": assessment["overall_score"],
-            "memory_recalled": scores["memory"]["recalled"],
-            "math_correct": scores["math"]["correct"],
-            "math_avg_time": scores["math"]["avg_time"],
-            "reaction_avg_time": scores["reaction"]["avg_time"],
-        }
-        history = []
-        if os.path.exists(log_path):
-            try:
-                with open(log_path) as f:
-                    history = json.load(f)
-            except Exception:
-                history = []
-        history.append(entry)
-        with open(log_path, "w") as f:
-            json.dump(history, f, indent=2)
+        db.save_alertness_log(
+            timestamp=datetime.now().isoformat(),
+            level=assessment["level"],
+            overall_score=assessment["overall_score"],
+            memory_recalled=scores["memory"]["recalled"],
+            math_correct=scores["math"]["correct"],
+            math_avg_time=scores["math"]["avg_time"],
+            reaction_avg_time=scores["reaction"]["avg_time"],
+        )
