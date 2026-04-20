@@ -62,7 +62,7 @@ _PAPERWORK_KW = {
     "bol", "bill", "lading", "manifest", "paperwork", "document",
     "form", "report", "inspection", "dvir", "permit",
     "ifta", "tax", "cdl", "license", "endorsement",
-    "hazmat", "placard", "drug", "alcohol", "test",
+    "hazmat", "placard", "drug", "alcohol",
     "started", "starting", "stopped", "stopping", "clocked",
     "on-duty", "offduty", "sleeper", "berth", "logbook",
     "record", "recording", "update", "certify", "certifying",

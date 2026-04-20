@@ -173,7 +173,8 @@ function randomBetween(lo, hi) { return lo + Math.random() * (hi - lo); }
 async function handleCommand(text) {
   const t = text.toLowerCase();
   if (/show.*(log|report)|my logs|view log|open log/.test(t)) { await showLogs(); return; }
-  if (t.includes('alertness') || t.includes('alert test') || t.includes('drowsy') || t.includes('check')) {
+  if (t.includes('alertness') || t.includes('drowsy') || t.includes('fatigue') ||
+      (t.includes('run') && t.includes('test')) || t.includes('alert test')) {
     await runAlertnessTest(); return;
   }
   if (t.includes('go back') || t.includes('back') || t.includes('cancel')) { setState('idle'); return; }
