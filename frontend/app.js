@@ -365,8 +365,7 @@ async function showLogs() {
     logsContent.innerHTML = '<p style="color:var(--danger);padding:1rem">Failed to load logs. Check your connection.</p>';
   }
 
-  await speak('Your logs are ready. Say go back when you are done.');
-  startListeningForBack();
+  await speak('Your logs are ready.');
 }
 
 function closeLogs() {
@@ -393,91 +392,53 @@ function startListeningForBack() {
   try { rec.start(); } catch (_) {}
 }
 
-// ── Main recognition loop ──────────────────────────────────────────────────
+// ── Tap-to-talk ────────────────────────────────────────────────────────────
 
 function stopListening() {
   if (mainRecognition) { try { mainRecognition.stop(); } catch (_) {} mainRecognition = null; }
-  clearTimeout(awakeTimer);
 }
 
 function startListening() {
   stopListening();
   setState('idle');
+  const btn = document.getElementById('talk-btn');
+  if (btn) { btn.textContent = '🎤 Tap to Talk'; btn.disabled = false; btn.classList.remove('listening'); }
+  if (debugText) debugText.textContent = '';
+}
 
+function listenForCommand() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    statusText.textContent = 'Voice not supported in this browser. Use Chrome.';
-    return;
-  }
+  if (!SR) { if (debugText) debugText.textContent = '❌ Speech recognition not supported. Use Chrome.'; return; }
 
-  let currentState = 'idle';
-  let commandAccum = '';
+  const btn = document.getElementById('talk-btn');
+  btn.textContent = '🎤 Listening...';
+  btn.classList.add('listening');
+  btn.disabled = true;
+  setState('awake');
 
   mainRecognition = new SR();
-  mainRecognition.continuous = true;
-  mainRecognition.interimResults = true;
   mainRecognition.lang = 'en-US';
-
-  mainRecognition.onstart = () => { if (debugText) debugText.textContent = '🎤 mic active'; };
-  mainRecognition.onspeechstart = () => { if (debugText) debugText.textContent = '🎤 speech detected...'; };
-  mainRecognition.onspeechend = () => { if (debugText) debugText.textContent = '🎤 speech ended'; };
+  mainRecognition.interimResults = true;
 
   mainRecognition.onresult = (e) => {
-    if (appState === 'processing' || appState === 'speaking' || appState === 'alertness' || appState === 'logs') return;
-
-    const results = Array.from(e.results);
-    const fullText = results.map(r => r[0].transcript).join(' ').toLowerCase();
-    const lastResult = results[results.length - 1];
-    const lastText = lastResult[0].transcript.toLowerCase().trim();
-    const isFinal = lastResult.isFinal;
-
-    if (currentState === 'idle') {
-      if (debugText) debugText.textContent = fullText.slice(-80);
-
-    if (fullText.includes(WAKE_WORD) || fullText.includes('elmida') || fullText.includes('almeeda')) {
-        currentState = 'awake';
-        setState('awake');
-        playBeep();
-        commandAccum = '';
-        clearTimeout(awakeTimer);
-        awakeTimer = setTimeout(() => {
-          if (currentState === 'awake') { currentState = 'idle'; setState('idle'); }
-        }, 8000);
-      }
-    } else if (currentState === 'awake') {
-      if (isFinal) {
-        // Strip wake word from the command if it's in the same utterance
-        let cmd = lastText.replace(/hey\s+el[a-z]*/gi, '').trim();
-        if (!cmd) return;
-        clearTimeout(awakeTimer);
-        currentState = 'done';
-        stopListening();
-        handleCommand(cmd);
-      }
+    const last = e.results[e.results.length - 1];
+    if (debugText) debugText.textContent = last[0].transcript;
+    if (last.isFinal) {
+      stopListening();
+      handleCommand(last[0].transcript.trim());
     }
   };
 
   mainRecognition.onerror = (e) => {
-    if (debugText) debugText.textContent = '❌ error: ' + e.error;
-    if (e.error === 'not-allowed') {
-      statusText.textContent = 'Microphone permission denied';
-      return;
-    }
-    setTimeout(startListening, 1000);
+    if (debugText) debugText.textContent = '❌ ' + e.error;
+    startListening();
   };
 
   mainRecognition.onend = () => {
-    if (debugText) debugText.textContent += ' (restarting...)';
-    if (appState === 'idle' || appState === 'awake') {
-      setTimeout(startListening, 300);
-    }
+    if (appState === 'awake') startListening();
   };
 
-  try {
-    mainRecognition.start();
-  } catch (_) {
-    setTimeout(startListening, 1000);
-  }
+  try { mainRecognition.start(); } catch (_) { startListening(); }
 }
 
 // ── Splash ─────────────────────────────────────────────────────────────────
@@ -508,6 +469,9 @@ function initSplash() {
     splashView.classList.add('hidden');
     mainViewEl.classList.remove('hidden');
     startListening();
+    document.getElementById('talk-btn').addEventListener('click', () => {
+      if (appState === 'idle') listenForCommand();
+    });
   });
 }
 
