@@ -482,26 +482,40 @@ function initSplash() {
   const splashBtn  = document.getElementById('splash-btn');
   const splashTip  = document.getElementById('splash-tip');
 
-  const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg|OPR/.test(navigator.userAgent);
+  const isChromium = /Chrome/.test(navigator.userAgent);
+  const isArc = /Arc\//.test(navigator.userAgent);
 
-  if (!isChrome) {
+  if (!isChromium) {
     browserWarn.classList.remove('hidden');
   } else {
     splashHow.classList.remove('hidden');
     splashBtn.classList.remove('hidden');
     splashTip.classList.remove('hidden');
+    if (isArc) {
+      splashTip.textContent = 'Arc user? Allow mic in Arc Settings → Privacy if prompted.';
+    }
   }
 
   splashBtn.addEventListener('click', () => {
+    splashBtn.textContent = 'Requesting mic...';
+    splashBtn.disabled = true;
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(() => {
+        // Test that SpeechRecognition actually works
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) throw new Error('no SR');
         splashView.classList.add('hidden');
         mainViewEl.classList.remove('hidden');
         startListening();
       })
       .catch(() => {
-        splashTip.textContent = 'Microphone access is required for this demo.';
+        splashBtn.textContent = 'Tap to Start';
+        splashBtn.disabled = false;
+        splashTip.textContent = isArc
+          ? 'Mic blocked. Go to Arc Settings → Privacy → Microphone and allow this site.'
+          : 'Microphone access is required. Check your browser permissions and try again.';
         splashTip.style.color = 'var(--danger)';
+        splashTip.classList.remove('hidden');
       });
   });
 }
