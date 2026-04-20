@@ -497,26 +497,38 @@ function initSplash() {
   }
 
   splashBtn.addEventListener('click', () => {
-    splashBtn.textContent = 'Requesting mic...';
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      splashTip.textContent = 'Speech recognition not available. Please use Chrome.';
+      splashTip.style.color = 'var(--danger)';
+      splashTip.classList.remove('hidden');
+      return;
+    }
+
+    splashBtn.textContent = 'Starting...';
     splashBtn.disabled = true;
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(() => {
-        // Test that SpeechRecognition actually works
-        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SR) throw new Error('no SR');
-        splashView.classList.add('hidden');
-        mainViewEl.classList.remove('hidden');
-        startListening();
-      })
-      .catch(() => {
-        splashBtn.textContent = 'Tap to Start';
-        splashBtn.disabled = false;
-        splashTip.textContent = isArc
-          ? 'Mic blocked. Go to Arc Settings → Privacy → Microphone and allow this site.'
-          : 'Microphone access is required. Check your browser permissions and try again.';
-        splashTip.style.color = 'var(--danger)';
-        splashTip.classList.remove('hidden');
-      });
+
+    // Let SpeechRecognition handle mic permission directly — avoids Arc audio routing conflicts
+    const test = new SR();
+    test.onstart = () => {
+      test.stop();
+      splashView.classList.add('hidden');
+      mainViewEl.classList.remove('hidden');
+      startListening();
+    };
+    test.onerror = (e) => {
+      splashBtn.textContent = 'Tap to Start';
+      splashBtn.disabled = false;
+      splashTip.textContent = e.error === 'not-allowed'
+        ? (isArc ? 'Mic blocked. Allow in Arc Settings → Privacy → Microphone.' : 'Microphone access denied. Check browser permissions.')
+        : 'Could not start voice recognition. Try reloading.';
+      splashTip.style.color = 'var(--danger)';
+      splashTip.classList.remove('hidden');
+    };
+    try { test.start(); } catch (_) {
+      splashBtn.textContent = 'Tap to Start';
+      splashBtn.disabled = false;
+    }
   });
 }
 

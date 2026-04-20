@@ -1,4 +1,4 @@
-const CACHE = 'elmeeda-v3';
+const CACHE = 'elmeeda-v4';
 const SHELL = ['/', '/app.js', '/styles.css'];
 
 self.addEventListener('install', e =>
