@@ -317,7 +317,7 @@ class DailyLogChecker:
         else:
             self._v.speak(
                 "Couldn't complete the log start. "
-                "Say 'Hey Truck, I started driving' anytime to log your status."
+                "Use Elmeeda Voice Assistant anytime to log your status."
             )
 
     # ── IFTA daily review ─────────────────────────────────────────────────────

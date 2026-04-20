@@ -47,7 +47,7 @@ function setState(s, statusMsg) {
   appState = s;
   document.body.className = 'state-' + s;
   const labels = {
-    idle:        'Say "Hey Elmeeda"',
+    idle:        'Elmeeda Voice Assistant',
     awake:       'Listening...',
     processing:  'Thinking...',
     speaking:    'Speaking...',
