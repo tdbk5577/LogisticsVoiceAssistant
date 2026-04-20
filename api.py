@@ -245,7 +245,7 @@ def text_to_speech(req: TTSRequest):
         timeout=15,
     )
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="ElevenLabs error")
+        raise HTTPException(status_code=502, detail=f"ElevenLabs {resp.status_code}: {resp.text[:300]}")
     return Response(content=resp.content, media_type="audio/mpeg")
 
 
