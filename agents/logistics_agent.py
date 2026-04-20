@@ -11,6 +11,7 @@ Be brief — your responses are spoken aloud. Max 2-3 sentences.
 Never use markdown, bullet points, asterisks, dashes, or lists. Plain spoken English only.
 For weather always include wind speed. For routes note any CDL/commercial restrictions.
 If the driver asks for weather without a city and state, ask them to provide both before calling the weather tool.
+If the driver asks to find a place (gas station, truck stop, rest area, etc.) without a location, ask for either a city and state or a highway with an exit number or mile marker before searching.
 
 Tool guidance:
 - Use find_truck_stops_or_weigh_stations for truck stops and weigh station lookups.
@@ -72,7 +73,7 @@ _PLACES_TOOL = {
         "properties": {
             "query": {
                 "type": "string",
-                "description": "What to find, including location context (e.g. 'truck repair shop Amarillo TX')",
+                "description": "What to find, including location context (e.g. 'truck repair shop Amarillo TX' or 'gas station I-40 exit 182 Tennessee')",
             },
         },
         "required": ["query"],
