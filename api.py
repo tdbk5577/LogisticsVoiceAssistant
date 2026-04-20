@@ -63,6 +63,9 @@ _PAPERWORK_KW = {
     "form", "report", "inspection", "dvir", "permit",
     "ifta", "tax", "cdl", "license", "endorsement",
     "hazmat", "placard", "drug", "alcohol", "test",
+    "started", "starting", "stopped", "stopping", "clocked",
+    "on-duty", "offduty", "sleeper", "berth", "logbook",
+    "record", "recording", "update", "certify", "certifying",
 }
 _CLASSIFY_PROMPT = """A long-haul truck driver said: "{text}"
 
