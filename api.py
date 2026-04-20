@@ -83,6 +83,9 @@ def _classify(text: str, active: str | None) -> str:
         return "logistics"
     if words & _PAPERWORK_KW:
         return "paperwork"
+    # No strong keywords — if mid-conversation, stay with the active agent
+    if active:
+        return active
     try:
         resp = _claude.messages.create(
             model=config.MODEL,
@@ -94,7 +97,7 @@ def _classify(text: str, active: str | None) -> str:
         )
         return category if category in ("logistics", "paperwork") else "unknown"
     except Exception:
-        return active or "unknown"
+        return "unknown"
 
 
 # ── Debug ─────────────────────────────────────────────────────────────────────
