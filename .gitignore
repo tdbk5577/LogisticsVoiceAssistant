@@ -1,0 +1,27 @@
+# Secrets
+.env
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Runtime data
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
