@@ -34,6 +34,7 @@ let awakeTimer = null;
 // ── DOM refs ───────────────────────────────────────────────────────────────
 
 const statusText  = document.getElementById('status-text');
+const debugText   = document.getElementById('debug-text');
 const agentBadge  = document.getElementById('agent-badge');
 const transcript  = document.getElementById('transcript');
 const mainView    = document.getElementById('main-view');
@@ -427,7 +428,9 @@ function startListening() {
     const isFinal = lastResult.isFinal;
 
     if (currentState === 'idle') {
-      if (fullText.includes(WAKE_WORD) || fullText.includes('elmida') || fullText.includes('almeeda')) {
+      if (debugText) debugText.textContent = fullText.slice(-80);
+
+    if (fullText.includes(WAKE_WORD) || fullText.includes('elmida') || fullText.includes('almeeda')) {
         currentState = 'awake';
         setState('awake');
         playBeep();
