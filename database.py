@@ -372,6 +372,12 @@ def get_driver_name() -> str | None:
     return row["driver_name"] if row else None
 
 
+def get_driver_profile() -> dict:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM driver_profile WHERE id = 1").fetchone()
+    return dict(row) if row else {}
+
+
 def set_driver_name(name: str):
     with _connect() as conn:
         conn.execute(
@@ -382,15 +388,51 @@ def set_driver_name(name: str):
         )
 
 
+def set_driver_profile(
+    driver_name: str = None,
+    carrier_address: str = None,
+    home_terminal: str = None,
+):
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO driver_profile (id, driver_name, carrier_address, home_terminal)
+               VALUES (1, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                   driver_name     = COALESCE(excluded.driver_name,     driver_name),
+                   carrier_address = COALESCE(excluded.carrier_address, carrier_address),
+                   home_terminal   = COALESCE(excluded.home_terminal,   home_terminal),
+                   updated_at      = datetime('now')""",
+            (driver_name, carrier_address, home_terminal),
+        )
+
+
+def certify_log(log_date: str = None) -> bool:
+    today = log_date or date.today().isoformat()
+    now = datetime.now().isoformat(timespec="seconds")
+    with _connect() as conn:
+        conn.execute("INSERT OR IGNORE INTO hos_logs (log_date) VALUES (?)", (today,))
+        conn.execute(
+            "UPDATE hos_logs SET certified = 1, certified_at = ? WHERE log_date = ?",
+            (now, today),
+        )
+    return True
+
+
 # ── Migrations (safe to run on existing DBs) ─────────────────────────────────
 
 def _migrate():
     with _connect() as conn:
-        for col in ["odometer_start INTEGER", "odometer_end INTEGER"]:
+        for sql in [
+            "ALTER TABLE hos_logs ADD COLUMN odometer_start INTEGER",
+            "ALTER TABLE hos_logs ADD COLUMN odometer_end INTEGER",
+            "ALTER TABLE hos_logs ADD COLUMN certified_at TEXT",
+            "ALTER TABLE driver_profile ADD COLUMN carrier_address TEXT",
+            "ALTER TABLE driver_profile ADD COLUMN home_terminal TEXT",
+        ]:
             try:
-                conn.execute(f"ALTER TABLE hos_logs ADD COLUMN {col}")
+                conn.execute(sql)
             except Exception:
-                pass  # Column already exists
+                pass
 
 
 # Initialize on import

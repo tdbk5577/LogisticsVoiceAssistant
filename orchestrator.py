@@ -107,8 +107,13 @@ class Orchestrator:
 
     # ── Main loop ────────────────────────────────────────────────────────────
 
+    def _is_ifta_review(self, text: str) -> bool:
+        t = text.lower()
+        return "ifta" in t and any(w in t for w in ("check", "review", "log", "record"))
+
     def run(self):
-        DailyLogChecker(self._voice).run()
+        checker = DailyLogChecker(self._voice)
+        checker.run()
 
         self._voice.speak("Truck AI ready. Say 'Hey Truck' to get started.")
         print("[TRUCK AI] Listening for wake word... (Ctrl+C to quit)")
@@ -123,6 +128,10 @@ class Orchestrator:
 
                 if not command:
                     self._voice.speak("Didn't catch that. Say 'Hey Truck' when ready.")
+                    continue
+
+                if self._is_ifta_review(command):
+                    checker.review_ifta()
                     continue
 
                 response = self.handle(command)

@@ -11,6 +11,23 @@ import database as db
 
 # ── Parsers ───────────────────────────────────────────────────────────────────
 
+_STATE_ABBREVS = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "florida": "FL", "georgia": "GA", "idaho": "ID", "illinois": "IL",
+    "indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY",
+    "louisiana": "LA", "maine": "ME", "maryland": "MD", "massachusetts": "MA",
+    "michigan": "MI", "minnesota": "MN", "mississippi": "MS", "missouri": "MO",
+    "montana": "MT", "nebraska": "NE", "nevada": "NV", "new hampshire": "NH",
+    "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH",
+    "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA",
+    "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+    "tennessee": "TN", "texas": "TX", "utah": "UT", "vermont": "VT",
+    "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY",
+}
+
 _STATUS_MAP = {
     "driving": "driving",
     "drive": "driving",
@@ -91,6 +108,19 @@ def _parse_odometer(text: str) -> int | None:
     return int(digits) if len(digits) >= 4 else None
 
 
+def _parse_jurisdiction(text: str) -> str | None:
+    t = text.lower().strip()
+    if t in _STATE_ABBREVS:
+        return _STATE_ABBREVS[t]
+    letters = re.sub(r'[^a-zA-Z]', '', t).upper()
+    return letters[:2] if len(letters) >= 2 else None
+
+
+def _parse_gallons(text: str) -> float | None:
+    m = re.search(r'\b(\d+(?:\.\d+)?)\b', text)
+    return float(m.group(1)) if m else None
+
+
 def _is_skip(text: str) -> bool:
     return bool(text) and any(
         w in text.lower() for w in ("none", "skip", "no", "n/a", "nothing", "same")
@@ -104,22 +134,45 @@ class DailyLogChecker:
         self._v = voice_engine
 
     def run(self):
-        self._ensure_driver_name()
+        self._ensure_driver_profile()
         self._complete_prior_day()
+        self._certify_yesterday()
         self._start_today()
 
-    # ── Driver name setup (first run only) ────────────────────────────────────
-
-    def _ensure_driver_name(self):
-        if db.get_driver_name():
+    def review_ifta(self):
+        """Prompt for any unlogged fuel stops and state crossings for today."""
+        today = date.today().isoformat()
+        if not db.get_hos_log(today):
+            self._v.speak("No log started for today yet.")
             return
-        self._v.speak("Welcome to Truck AI. What is your full name for the driver logs?")
-        name = self._v.listen(timeout=12, phrase_limit=10)
-        if name:
-            db.set_driver_name(name.title())
-            self._v.speak(f"Got it, {name.title()}. I'll use that on every log.")
-        else:
-            db.set_driver_name("Driver")
+        self._review_prior_ifta(today)
+
+    # ── Driver profile setup (first run only) ─────────────────────────────────
+
+    def _ensure_driver_profile(self):
+        profile = db.get_driver_profile()
+
+        if not profile.get("driver_name"):
+            self._v.speak("Welcome to Truck AI. What is your full name for the driver logs?")
+            name = self._v.listen(timeout=12, phrase_limit=10)
+            name = name.title() if name else "Driver"
+            db.set_driver_profile(driver_name=name)
+            self._v.speak(f"Got it, {name}. I'll use that on every log.")
+
+        if not profile.get("carrier_address"):
+            self._v.speak(
+                "One-time setup: what is your carrier's address? "
+                "Include street, city, and state."
+            )
+            addr = self._v.listen(timeout=15, phrase_limit=20)
+            if addr:
+                db.set_driver_profile(carrier_address=addr)
+
+        if not profile.get("home_terminal"):
+            self._v.speak("What city and state is your home terminal?")
+            terminal = self._v.listen(timeout=12, phrase_limit=10)
+            if terminal:
+                db.set_driver_profile(home_terminal=terminal)
 
     # ── Prior day completion ───────────────────────────────────────────────────
 
@@ -197,6 +250,22 @@ class DailyLogChecker:
         )
         trailer = None if not trailer_resp or _is_skip(trailer_resp) else trailer_resp
 
+        # From location — default to yesterday's to_location
+        from_default = prev.get("to_location") or prev.get("from_location")
+        from_loc = self._carry_forward(
+            "starting location", from_default,
+            "Where are you starting from today? City and state."
+        )
+
+        # To location — always prompt
+        to_loc = self._ask_text("Where are you headed today? City and state.")
+
+        # Co-driver — carry forward or prompt
+        co_resp = self._ask_optional(
+            "Any co-driver today? Say their name, or say none if you're solo."
+        )
+        co_driver = None if not co_resp or _is_skip(co_resp) else co_resp
+
         # BOL and shipping doc numbers — optional
         bol_resp = self._ask_optional(
             "Any Bill of Lading or shipping document numbers? Say none to skip."
@@ -212,6 +281,9 @@ class DailyLogChecker:
             carrier_name=carrier,
             truck_number=truck,
             trailer_number=trailer,
+            from_location=from_loc,
+            to_location=to_loc,
+            co_driver=co_driver,
             bol_numbers=bol,
             odometer_start=odo_start,
         )
@@ -247,6 +319,99 @@ class DailyLogChecker:
                 "Couldn't complete the log start. "
                 "Say 'Hey Truck, I started driving' anytime to log your status."
             )
+
+    # ── IFTA daily review ─────────────────────────────────────────────────────
+
+    def _review_prior_ifta(self, log_date: str):
+        self._v.speak("Any fuel stops not already logged? Say yes or no.")
+        resp = self._v.listen(timeout=8, phrase_limit=5)
+        if resp and "yes" in resp.lower():
+            self._collect_fuel_stops(log_date)
+
+        self._v.speak("Any state line crossings not already logged? Say yes or no.")
+        resp = self._v.listen(timeout=8, phrase_limit=5)
+        if resp and "yes" in resp.lower():
+            self._collect_state_crossings(log_date)
+
+    def _collect_fuel_stops(self, log_date: str):
+        while True:
+            jurisdiction = self._ask_jurisdiction(
+                "What two-letter state code did you fuel in? For example, say T X for Texas."
+            )
+            if not jurisdiction:
+                self._v.speak("Couldn't get state, skipping fuel stop.")
+                break
+
+            gallons = self._ask_gallons("How many gallons?")
+            if not gallons:
+                self._v.speak("Couldn't get gallons, skipping this stop.")
+            else:
+                price_resp = self._ask_optional("Price per gallon? Say skip if unknown.")
+                price = None
+                if price_resp and not _is_skip(price_resp):
+                    m = re.search(r'\d+(?:\.\d+)?', price_resp)
+                    price = float(m.group()) if m else None
+
+                vendor_resp = self._ask_optional("Vendor name? Say skip if unknown.")
+                vendor = None if not vendor_resp or _is_skip(vendor_resp) else vendor_resp
+
+                db.log_fuel_purchase(
+                    jurisdiction=jurisdiction,
+                    gallons=gallons,
+                    price_per_gallon=price,
+                    vendor=vendor or "",
+                    purchase_date=log_date,
+                )
+                self._v.speak(f"Logged {gallons} gallons in {jurisdiction}.")
+
+            self._v.speak("Any more fuel stops? Say yes or no.")
+            resp = self._v.listen(timeout=8, phrase_limit=5)
+            if not resp or "yes" not in resp.lower():
+                break
+
+    def _collect_state_crossings(self, log_date: str):
+        while True:
+            jurisdiction = self._ask_jurisdiction(
+                "What state did you enter? Say the two-letter code."
+            )
+            if not jurisdiction:
+                self._v.speak("Couldn't get state, skipping crossing.")
+                break
+
+            odometer = self._ask_odometer(f"Odometer when you entered {jurisdiction}?")
+            crossing_time = self._ask_time(f"What time did you cross into {jurisdiction}?")
+
+            if odometer:
+                db.log_state_crossing(
+                    jurisdiction=jurisdiction,
+                    odometer=odometer,
+                    crossing_time=crossing_time,
+                    crossing_date=log_date,
+                )
+                self._v.speak(f"Logged entry into {jurisdiction}.")
+
+            self._v.speak("Any more crossings? Say yes or no.")
+            resp = self._v.listen(timeout=8, phrase_limit=5)
+            if not resp or "yes" not in resp.lower():
+                break
+
+    # ── Driver certification ──────────────────────────────────────────────────
+
+    def _certify_yesterday(self):
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        log = db.get_hos_log(yesterday)
+        if not log or log.get("certified"):
+            return
+        self._v.speak(
+            f"Do you certify yesterday's log for {yesterday} "
+            "is true and correct? Say yes or no."
+        )
+        resp = self._v.listen(timeout=10, phrase_limit=5)
+        if resp and "yes" in resp.lower():
+            db.certify_log(yesterday)
+            self._v.speak("Log certified.")
+        else:
+            self._v.speak("Okay, you can certify it later.")
 
     # ── Voice helpers ─────────────────────────────────────────────────────────
 
@@ -293,6 +458,30 @@ class DailyLogChecker:
                 self._v.speak(
                     "Please say driving, off duty, sleeper berth, or on duty not driving."
                 )
+        return None
+
+    def _ask_jurisdiction(self, prompt: str) -> str | None:
+        self._v.speak(prompt)
+        for attempt in range(2):
+            resp = self._v.listen(timeout=8, phrase_limit=5)
+            if resp:
+                j = _parse_jurisdiction(resp)
+                if j:
+                    return j
+            if attempt == 0:
+                self._v.speak("Say the two-letter state code, like T X for Texas.")
+        return None
+
+    def _ask_gallons(self, prompt: str) -> float | None:
+        self._v.speak(prompt)
+        for attempt in range(2):
+            resp = self._v.listen(timeout=8, phrase_limit=5)
+            if resp:
+                g = _parse_gallons(resp)
+                if g:
+                    return g
+            if attempt == 0:
+                self._v.speak("Say a number, for example eighty or one hundred twenty.")
         return None
 
     def _carry_forward(self, label: str, prev_value: str | None, prompt: str) -> str | None:
