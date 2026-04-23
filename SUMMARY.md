@@ -1,7 +1,7 @@
 # Truck AI — Voice Assistant for Long-Haul Drivers
 
 A voice-first AI co-pilot for commercial truck drivers. Runs on macOS or as a hosted API backend.
-Wake word: **"Hey Truck"** (also: "Truck AI", "Hey Driver", "Hey Assistant")
+
 
 ---
 
