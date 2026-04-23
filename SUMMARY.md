@@ -16,7 +16,7 @@ main.py  (local)                          api.py  (hosted)
     └── DrowsyTest       — 3-part alertness test with scored assessment
 ```
 
-The orchestrator listens for the wake word, classifies the driver's command via keyword matching (with Claude as fallback), and routes to the appropriate agent. It tracks the active agent so follow-up questions stay in context.
+
 
 ---
 
