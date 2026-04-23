@@ -1,6 +1,6 @@
 # Truck AI — Voice Assistant for Long-Haul Drivers
 
-A voice-first AI co-pilot for commercial truck drivers. Runs on macOS or as a hosted API backend.
+A voice-first AI co-pilot for commercial truck drivers. Runs on macOS or as a hosted API backend. Link to protype here: https://web-production-03138.up.railway.app/ (use Google Chrome). 
 
 
 ---
