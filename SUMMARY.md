@@ -30,11 +30,11 @@ The backend is designed to be hosted on **Railway** with the mobile app built in
 | Database | SQLite (`data/truck_ai.db`) — migrate to PostgreSQL to scale |
 | Mobile app | React Native + Expo (share via QR code, no App Store needed) |
 | TTS | ElevenLabs streaming (falls back to macOS `say` locally) |
-| STT + wake word | Handled on-device by the mobile app |
+
 
 **To deploy on Railway:** push to GitHub → New project → Deploy from repo → set env vars.
 
-The mobile app handles: STT, wake word detection, ElevenLabs TTS playback, Bluetooth audio routing, and the drowsy test timing. The backend handles: agent logic, intent routing, and all database reads/writes.
+The mobile app handles: STT, ElevenLabs TTS playback, Bluetooth audio routing, and the drowsy test timing. The backend handles: agent logic, intent routing, and all database reads/writes.
 
 ### API Endpoints
 
