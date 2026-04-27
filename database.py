@@ -1,5 +1,5 @@
 """
-SQLite database for HOS logs and IFTA fuel tax records.
+PostgreSQL database for HOS logs and IFTA fuel tax records.
 
 Schema mirrors the physical paper forms:
   - hos_logs       → FMCSA Form 395.8 header fields
@@ -9,36 +9,46 @@ Schema mirrors the physical paper forms:
 """
 
 import os
-import sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime
 
-DB_PATH = "data/truck_ai.db"
+import psycopg2
+import psycopg2.extras
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/truck_ai")
+
+_TS_NOW = "TO_CHAR(NOW(), 'YYYY-MM-DD\"T\"HH24:MI:SS')"
 
 
-# ── Setup ─────────────────────────────────────────────────────────────────────
-
-def _connect() -> sqlite3.Connection:
-    os.makedirs("data", exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+@contextmanager
+def _connect():
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
-    with _connect() as conn:
-        conn.executescript("""
-            -- Driver profile — single row, pre-fills every log
+    with _connect() as cur:
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS driver_profile (
-                id          INTEGER PRIMARY KEY DEFAULT 1,
-                driver_name TEXT,
-                updated_at  TEXT DEFAULT (datetime('now'))
-            );
-
-            -- FMCSA 395.8 header — one row per calendar day
+                id              INTEGER PRIMARY KEY,
+                driver_name     TEXT,
+                carrier_address TEXT,
+                home_terminal   TEXT,
+                updated_at      TEXT DEFAULT {_TS_NOW}
+            )
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS hos_logs (
-                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-                log_date             DATE    NOT NULL UNIQUE,
+                id                   SERIAL PRIMARY KEY,
+                log_date             DATE NOT NULL UNIQUE,
                 from_location        TEXT,
                 to_location          TEXT,
                 odometer_start       INTEGER,
@@ -51,26 +61,27 @@ def init_db():
                 bol_numbers          TEXT,
                 shipping_doc_numbers TEXT,
                 certified            INTEGER DEFAULT 0,
-                created_at           TEXT    DEFAULT (datetime('now'))
-            );
-
-            -- 395.8 duty status grid — each row is one status period
+                certified_at         TEXT,
+                created_at           TEXT DEFAULT {_TS_NOW}
+            )
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS hos_entries (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                log_date     DATE NOT NULL,
-                status       TEXT NOT NULL CHECK(status IN (
-                                 'off_duty','sleeper_berth',
-                                 'driving','on_duty_not_driving')),
-                start_time   TEXT NOT NULL,
-                end_time     TEXT,
-                location     TEXT,
-                remarks      TEXT,
-                created_at   TEXT DEFAULT (datetime('now'))
-            );
-
-            -- IFTA-100 fuel purchase detail — one row per receipt
+                id         SERIAL PRIMARY KEY,
+                log_date   DATE NOT NULL,
+                status     TEXT NOT NULL CHECK(status IN (
+                               'off_duty','sleeper_berth',
+                               'driving','on_duty_not_driving')),
+                start_time TEXT NOT NULL,
+                end_time   TEXT,
+                location   TEXT,
+                remarks    TEXT,
+                created_at TEXT DEFAULT {_TS_NOW}
+            )
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS ifta_fuel (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                id               SERIAL PRIMARY KEY,
                 purchase_date    DATE NOT NULL,
                 jurisdiction     TEXT NOT NULL,
                 fuel_type        TEXT NOT NULL DEFAULT 'diesel',
@@ -82,30 +93,30 @@ def init_db():
                 receipt_number   TEXT,
                 odometer         INTEGER,
                 vehicle_unit     TEXT,
-                created_at       TEXT DEFAULT (datetime('now'))
-            );
-
-            -- Alertness test results
+                created_at       TEXT DEFAULT {_TS_NOW}
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS alertness_logs (
-                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp           TEXT NOT NULL,
-                level               TEXT NOT NULL,
-                overall_score       REAL NOT NULL,
-                memory_recalled     INTEGER,
-                math_correct        INTEGER,
-                math_avg_time       REAL,
-                reaction_avg_time   REAL
-            );
-
-            -- State/province crossings — used to calculate miles per jurisdiction
+                id                SERIAL PRIMARY KEY,
+                timestamp         TEXT NOT NULL,
+                level             TEXT NOT NULL,
+                overall_score     REAL NOT NULL,
+                memory_recalled   INTEGER,
+                math_correct      INTEGER,
+                math_avg_time     REAL,
+                reaction_avg_time REAL
+            )
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS ifta_crossings (
-                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-                crossing_date      DATE NOT NULL,
-                crossing_time      TEXT NOT NULL,
-                jurisdiction       TEXT NOT NULL,
-                odometer           INTEGER NOT NULL,
-                created_at         TEXT DEFAULT (datetime('now'))
-            );
+                id            SERIAL PRIMARY KEY,
+                crossing_date DATE NOT NULL,
+                crossing_time TEXT NOT NULL,
+                jurisdiction  TEXT NOT NULL,
+                odometer      INTEGER NOT NULL,
+                created_at    TEXT DEFAULT {_TS_NOW}
+            )
         """)
 
 
@@ -124,21 +135,19 @@ def log_duty_status(
     Returns a summary of hours remaining.
     """
     today = log_date or date.today().isoformat()
-    with _connect() as conn:
-        # Close the previous open entry
-        conn.execute(
-            """UPDATE hos_entries SET end_time = ?
-               WHERE log_date = ? AND end_time IS NULL""",
+    with _connect() as cur:
+        cur.execute(
+            """UPDATE hos_entries SET end_time = %s
+               WHERE log_date = %s AND end_time IS NULL""",
             (start_time, today),
         )
-        conn.execute(
+        cur.execute(
             """INSERT INTO hos_entries (log_date, status, start_time, location, remarks)
-               VALUES (?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s)""",
             (today, status, start_time, location, remarks),
         )
-        # Ensure a daily log header row exists
-        conn.execute(
-            "INSERT OR IGNORE INTO hos_logs (log_date) VALUES (?)", (today,)
+        cur.execute(
+            "INSERT INTO hos_logs (log_date) VALUES (%s) ON CONFLICT DO NOTHING", (today,)
         )
     return get_hos_summary(today)
 
@@ -146,18 +155,19 @@ def log_duty_status(
 def get_hos_summary(log_date: str = None) -> dict:
     """Return driving hours, on-duty hours, and remaining limits for a given date."""
     today = log_date or date.today().isoformat()
-    with _connect() as conn:
-        rows = conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """SELECT status, start_time, end_time
-               FROM hos_entries WHERE log_date = ?
+               FROM hos_entries WHERE log_date = %s
                ORDER BY start_time""",
             (today,),
-        ).fetchall()
+        )
+        rows = cur.fetchall()
 
     totals = {s: 0.0 for s in ("driving", "on_duty_not_driving", "off_duty", "sleeper_berth")}
     for row in rows:
         end = row["end_time"] or datetime.now().strftime("%H:%M")
-        hrs = _hours_between(today, row["start_time"], today, end)
+        hrs = _hours_between(str(today), row["start_time"], str(today), end)
         if row["status"] in totals:
             totals[row["status"]] += hrs
 
@@ -175,19 +185,20 @@ def get_hos_summary(log_date: str = None) -> dict:
 
 def get_weekly_hours() -> dict:
     """Return total on-duty hours in the current 8-day rolling window."""
-    with _connect() as conn:
-        rows = conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """SELECT log_date, status, start_time, end_time
                FROM hos_entries
-               WHERE log_date >= date('now', '-7 days')
-               AND status IN ('driving', 'on_duty_not_driving')""",
-        ).fetchall()
+               WHERE log_date >= CURRENT_DATE - INTERVAL '7 days'
+               AND status IN ('driving', 'on_duty_not_driving')"""
+        )
+        rows = cur.fetchall()
 
     total = 0.0
     now = datetime.now()
     for row in rows:
         end = row["end_time"] or now.strftime("%H:%M")
-        total += _hours_between(row["log_date"], row["start_time"], row["log_date"], end)
+        total += _hours_between(str(row["log_date"]), row["start_time"], str(row["log_date"]), end)
 
     used = round(total, 2)
     return {
@@ -209,11 +220,15 @@ def update_log_header(log_date: str = None, **fields) -> bool:
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
-    cols = ", ".join(f"{k} = ?" for k in updates)
-    with _connect() as conn:
-        conn.execute(f"INSERT OR IGNORE INTO hos_logs (log_date) VALUES (?)", (today,))
-        conn.execute(f"UPDATE hos_logs SET {cols} WHERE log_date = ?",
-                     (*updates.values(), today))
+    cols = ", ".join(f"{k} = %s" for k in updates)
+    with _connect() as cur:
+        cur.execute(
+            "INSERT INTO hos_logs (log_date) VALUES (%s) ON CONFLICT DO NOTHING", (today,)
+        )
+        cur.execute(
+            f"UPDATE hos_logs SET {cols} WHERE log_date = %s",
+            (*updates.values(), today),
+        )
     return True
 
 
@@ -233,12 +248,12 @@ def log_fuel_purchase(
     """Record a fuel purchase receipt for IFTA reporting."""
     today = purchase_date or date.today().isoformat()
     total = round(gallons * price_per_gallon, 2) if price_per_gallon else None
-    with _connect() as conn:
-        conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """INSERT INTO ifta_fuel
                (purchase_date, jurisdiction, fuel_type, gallons, price_per_gallon,
                 total_amount, vendor, vendor_city, receipt_number, odometer)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (today, jurisdiction.upper(), fuel_type, gallons,
              price_per_gallon, total, vendor, vendor_city, receipt_number, odometer),
         )
@@ -261,10 +276,10 @@ def log_state_crossing(
     """Record entering a new state/province for IFTA mileage tracking."""
     today = crossing_date or date.today().isoformat()
     now_time = crossing_time or datetime.now().strftime("%H:%M")
-    with _connect() as conn:
-        conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """INSERT INTO ifta_crossings (crossing_date, crossing_time, jurisdiction, odometer)
-               VALUES (?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s)""",
             (today, now_time, jurisdiction.upper(), odometer),
         )
     return {"recorded": True, "jurisdiction": jurisdiction.upper(), "odometer": odometer}
@@ -276,7 +291,6 @@ def get_ifta_summary(quarter: int, year: int) -> dict:
     Returns miles and fuel by jurisdiction, plus fleet MPG.
     """
     start_month = (quarter - 1) * 3 + 1
-    # Last day of the quarter's final month
     end_month = start_month + 2
     if end_month in (1, 3, 5, 7, 8, 10, 12):
         end_day = 31
@@ -287,24 +301,26 @@ def get_ifta_summary(quarter: int, year: int) -> dict:
     start_date = f"{year}-{start_month:02d}-01"
     end_date = f"{year}-{end_month:02d}-{end_day}"
 
-    with _connect() as conn:
-        fuel_rows = conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """SELECT jurisdiction,
-                      SUM(gallons)   AS total_gallons,
+                      SUM(gallons)      AS total_gallons,
                       SUM(total_amount) AS total_cost
                FROM ifta_fuel
-               WHERE purchase_date BETWEEN ? AND ?
+               WHERE purchase_date BETWEEN %s AND %s
                GROUP BY jurisdiction""",
             (start_date, end_date),
-        ).fetchall()
+        )
+        fuel_rows = cur.fetchall()
 
-        crossing_rows = conn.execute(
+        cur.execute(
             """SELECT jurisdiction, odometer
                FROM ifta_crossings
-               WHERE crossing_date BETWEEN ? AND ?
+               WHERE crossing_date BETWEEN %s AND %s
                ORDER BY crossing_date, crossing_time""",
             (start_date, end_date),
-        ).fetchall()
+        )
+        crossing_rows = cur.fetchall()
 
     fuel_by_state = {
         r["jurisdiction"]: {
@@ -350,52 +366,55 @@ def _hours_between(date1: str, time1: str, date2: str, time2: str) -> float:
 
 def get_hos_log(log_date: str) -> dict | None:
     """Return the 395.8 header row for a given date, or None if not started."""
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM hos_logs WHERE log_date = ?", (log_date,)
-        ).fetchone()
+    with _connect() as cur:
+        cur.execute("SELECT * FROM hos_logs WHERE log_date = %s", (log_date,))
+        row = cur.fetchone()
     return dict(row) if row else None
 
 
 def get_open_entries(log_date: str) -> list[dict]:
     """Return duty status entries with no end_time for a given date."""
-    with _connect() as conn:
-        rows = conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """SELECT * FROM hos_entries
-               WHERE log_date = ? AND end_time IS NULL
+               WHERE log_date = %s AND end_time IS NULL
                ORDER BY start_time""",
             (log_date,),
-        ).fetchall()
+        )
+        rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 
 def close_entry(entry_id: int, end_time: str):
     """Set end_time on a specific duty status entry."""
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE hos_entries SET end_time = ? WHERE id = ?",
+    with _connect() as cur:
+        cur.execute(
+            "UPDATE hos_entries SET end_time = %s WHERE id = %s",
             (end_time, entry_id),
         )
 
 
 def get_driver_name() -> str | None:
-    with _connect() as conn:
-        row = conn.execute("SELECT driver_name FROM driver_profile WHERE id = 1").fetchone()
+    with _connect() as cur:
+        cur.execute("SELECT driver_name FROM driver_profile WHERE id = 1")
+        row = cur.fetchone()
     return row["driver_name"] if row else None
 
 
 def get_driver_profile() -> dict:
-    with _connect() as conn:
-        row = conn.execute("SELECT * FROM driver_profile WHERE id = 1").fetchone()
+    with _connect() as cur:
+        cur.execute("SELECT * FROM driver_profile WHERE id = 1")
+        row = cur.fetchone()
     return dict(row) if row else {}
 
 
 def set_driver_name(name: str):
-    with _connect() as conn:
-        conn.execute(
-            """INSERT INTO driver_profile (id, driver_name) VALUES (1, ?)
-               ON CONFLICT(id) DO UPDATE SET driver_name = excluded.driver_name,
-               updated_at = datetime('now')""",
+    with _connect() as cur:
+        cur.execute(
+            f"""INSERT INTO driver_profile (id, driver_name) VALUES (1, %s)
+               ON CONFLICT (id) DO UPDATE SET
+                   driver_name = EXCLUDED.driver_name,
+                   updated_at  = {_TS_NOW}""",
             (name,),
         )
 
@@ -405,24 +424,25 @@ def set_driver_profile(
     carrier_address: str = None,
     home_terminal: str = None,
 ):
-    with _connect() as conn:
-        conn.execute(
-            """INSERT INTO driver_profile (id, driver_name, carrier_address, home_terminal)
-               VALUES (1, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-                   driver_name     = COALESCE(excluded.driver_name,     driver_name),
-                   carrier_address = COALESCE(excluded.carrier_address, carrier_address),
-                   home_terminal   = COALESCE(excluded.home_terminal,   home_terminal),
-                   updated_at      = datetime('now')""",
+    with _connect() as cur:
+        cur.execute(
+            f"""INSERT INTO driver_profile (id, driver_name, carrier_address, home_terminal)
+               VALUES (1, %s, %s, %s)
+               ON CONFLICT (id) DO UPDATE SET
+                   driver_name     = COALESCE(EXCLUDED.driver_name,     driver_profile.driver_name),
+                   carrier_address = COALESCE(EXCLUDED.carrier_address, driver_profile.carrier_address),
+                   home_terminal   = COALESCE(EXCLUDED.home_terminal,   driver_profile.home_terminal),
+                   updated_at      = {_TS_NOW}""",
             (driver_name, carrier_address, home_terminal),
         )
 
 
 def get_alertness_history(limit: int = 20) -> list[dict]:
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM alertness_logs ORDER BY timestamp DESC LIMIT ?", (limit,)
-        ).fetchall()
+    with _connect() as cur:
+        cur.execute(
+            "SELECT * FROM alertness_logs ORDER BY timestamp DESC LIMIT %s", (limit,)
+        )
+        rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 
@@ -435,12 +455,12 @@ def save_alertness_log(
     math_avg_time: float,
     reaction_avg_time: float,
 ):
-    with _connect() as conn:
-        conn.execute(
+    with _connect() as cur:
+        cur.execute(
             """INSERT INTO alertness_logs
                (timestamp, level, overall_score, memory_recalled,
                 math_correct, math_avg_time, reaction_avg_time)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
             (timestamp, level, overall_score, memory_recalled,
              math_correct, math_avg_time, reaction_avg_time),
         )
@@ -449,10 +469,12 @@ def save_alertness_log(
 def certify_log(log_date: str = None) -> bool:
     today = log_date or date.today().isoformat()
     now = datetime.now().isoformat(timespec="seconds")
-    with _connect() as conn:
-        conn.execute("INSERT OR IGNORE INTO hos_logs (log_date) VALUES (?)", (today,))
-        conn.execute(
-            "UPDATE hos_logs SET certified = 1, certified_at = ? WHERE log_date = ?",
+    with _connect() as cur:
+        cur.execute(
+            "INSERT INTO hos_logs (log_date) VALUES (%s) ON CONFLICT DO NOTHING", (today,)
+        )
+        cur.execute(
+            "UPDATE hos_logs SET certified = 1, certified_at = %s WHERE log_date = %s",
             (now, today),
         )
     return True
@@ -461,18 +483,15 @@ def certify_log(log_date: str = None) -> bool:
 # ── Migrations (safe to run on existing DBs) ─────────────────────────────────
 
 def _migrate():
-    with _connect() as conn:
+    with _connect() as cur:
         for sql in [
-            "ALTER TABLE hos_logs ADD COLUMN odometer_start INTEGER",
-            "ALTER TABLE hos_logs ADD COLUMN odometer_end INTEGER",
-            "ALTER TABLE hos_logs ADD COLUMN certified_at TEXT",
-            "ALTER TABLE driver_profile ADD COLUMN carrier_address TEXT",
-            "ALTER TABLE driver_profile ADD COLUMN home_terminal TEXT",
+            "ALTER TABLE hos_logs ADD COLUMN IF NOT EXISTS odometer_start INTEGER",
+            "ALTER TABLE hos_logs ADD COLUMN IF NOT EXISTS odometer_end INTEGER",
+            "ALTER TABLE hos_logs ADD COLUMN IF NOT EXISTS certified_at TEXT",
+            "ALTER TABLE driver_profile ADD COLUMN IF NOT EXISTS carrier_address TEXT",
+            "ALTER TABLE driver_profile ADD COLUMN IF NOT EXISTS home_terminal TEXT",
         ]:
-            try:
-                conn.execute(sql)
-            except Exception:
-                pass
+            cur.execute(sql)
 
 
 # Initialize on import
