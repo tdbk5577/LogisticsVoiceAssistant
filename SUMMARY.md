@@ -1,6 +1,6 @@
 # Truck AI — Voice Assistant for Long-Haul Drivers
 
-A voice-first AI co-pilot for commercial truck drivers. Runs on macOS or as a hosted API backend.
+A voice-first AI co-pilot for commercial truck drivers. Runs on macOS or as a hosted API backend. Link to protype here: https://web-production-03138.up.railway.app/ (use Google Chrome). 
 
 
 ---
@@ -30,11 +30,11 @@ The backend is designed to be hosted on **Railway** with the mobile app built in
 | Database | SQLite (`data/truck_ai.db`) — migrate to PostgreSQL to scale |
 | Mobile app | React Native + Expo (share via QR code, no App Store needed) |
 | TTS | ElevenLabs streaming (falls back to macOS `say` locally) |
-| STT + wake word | Handled on-device by the mobile app |
+
 
 **To deploy on Railway:** push to GitHub → New project → Deploy from repo → set env vars.
 
-The mobile app handles: STT, wake word detection, ElevenLabs TTS playback, Bluetooth audio routing, and the drowsy test timing. The backend handles: agent logic, intent routing, and all database reads/writes.
+The mobile app handles: STT, ElevenLabs TTS playback, Bluetooth audio routing, and the drowsy test timing. The backend handles: agent logic, intent routing, and all database reads/writes.
 
 ### API Endpoints
 
@@ -112,7 +112,7 @@ Database is auto-created on first run. IFTA quarterly miles per state are derive
 
 ---
 
-## Agent 3 — Drowsy Driving Test (`agents/drowsy_test.py`)
+##Drowsy Driving Test 
 
 A structured 3-part voice test. Results are scored and assessed by Claude, then spoken aloud. Every test is logged to the database (`alertness_logs` table).
 
