@@ -1,6 +1,7 @@
 import anthropic
 import config
 import database as db
+import vector_store
 
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -13,8 +14,11 @@ When a driver tells you what they're doing (e.g. "I just started driving", "fuel
 80 gallons at Pilot"), extract the details and call the right tool immediately.
 After logging, confirm in one short sentence what was recorded — do not read back hours or stats unless the driver specifically asks for them.
 
-For general paperwork questions (BOL requirements, DVIR rules, permit info, CDL endorsements,
-hazmat docs) answer from your knowledge — no tool needed.
+For specific FMCSA / IFTA regulation questions (HOS limits, exceptions, sleeper berth splits,
+form 395.8 requirements, IFTA deadlines, DVIR rules, hazmat placarding, etc.) call
+search_regulations first to retrieve the authoritative passage, then answer based on it and
+cite the CFR section. For general operational questions you already know the answer to,
+respond directly without the tool.
 
 FMCSA HOS limits:
 - Driving: {config.DRIVE_LIMIT_HOURS} hrs/shift · On-duty: {config.ON_DUTY_LIMIT_HOURS} hrs/shift
@@ -146,6 +150,25 @@ _TOOLS = [
         },
     },
     {
+        "name": "search_regulations",
+        "description": (
+            "Semantic search over FMCSA and IFTA regulation text (HOS limits, sleeper berth, "
+            "395.8 form fields, ELD rules, IFTA deadlines, DVIR, hazmat). Returns the most "
+            "relevant passages with CFR citations. Use this before answering any specific "
+            "compliance question to ground the answer in the actual regulation."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language question about a regulation (e.g. 'how does the 8/2 sleeper split work')",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "get_ifta_summary",
         "description": "Get the IFTA quarterly summary: total miles and fuel by state, fleet MPG, and net taxable gallons per jurisdiction.",
         "input_schema": {
@@ -224,6 +247,15 @@ def _dispatch(name: str, inputs: dict) -> str:
                 crossing_time=inputs.get("crossing_time"),
             )
             return f"Logged entry into {r['jurisdiction']} at odometer {r['odometer']}."
+
+        if name == "search_regulations":
+            hits = vector_store.search(inputs["query"], k=3)
+            if not hits:
+                return "No matching regulation found."
+            return "\n\n".join(
+                f"{h['title']} ({h['citation']}):\n{h['content']}"
+                for h in hits
+            )
 
         if name == "get_ifta_summary":
             r = db.get_ifta_summary(inputs["quarter"], inputs["year"])

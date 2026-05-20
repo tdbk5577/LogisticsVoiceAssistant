@@ -34,8 +34,27 @@ def _connect():
         conn.close()
 
 
+EMBED_DIM = 1024  # voyage-3-large
+
+
 def init_db():
     with _connect() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS fmcsa_documents (
+                id         SERIAL PRIMARY KEY,
+                title      TEXT NOT NULL,
+                citation   TEXT,
+                content    TEXT NOT NULL,
+                embedding  vector({EMBED_DIM}),
+                created_at TEXT DEFAULT {_TS_NOW}
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS fmcsa_documents_embedding_idx
+            ON fmcsa_documents USING ivfflat (embedding vector_cosine_ops)
+            WITH (lists = 10)
+        """)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS driver_profile (
                 id              INTEGER PRIMARY KEY,
